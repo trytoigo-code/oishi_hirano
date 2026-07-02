@@ -46,12 +46,12 @@
       1人選択：最近の流れ・相手別成績・決着内容・対局履歴
       2人選択：最近の流れ・決着内容・直接対局履歴
   - 手合い自動計算（3連勝で手合い変更、多段階対応）
-  - 手合いレベルの独立保存（履歴に依存せず管理）
+  - 手合いの独立保存（履歴に依存せず管理）
   - 初期手合い設定（ペアごとに手合いを手動設定可能）
-  - シーズンリセット（履歴をFirebaseに保存後リセット・手合いレベルは引き継ぎ）
+  - シーズンリセット（履歴をFirebaseに保存後リセット・手合いは引き継ぎ）
   - 過去シーズンのアーカイブ表示（Firebase go-league/seasons/ に保存）
   - 管理者メニュー（折りたたみ式・対局者設定・初期手合い設定・シーズン管理を収録）
-  - 完全リセット（履歴・アーカイブ・シーズン番号を消去してシーズン1に戻す。手合いレベルは保持）
+  - 完全リセット（履歴・アーカイブ・シーズン番号を消去してシーズン1に戻す。手合いは保持）
   - 勝敗グラフ（順位タブ最上部。名前をベースラインに勝ちバーは上・負けバーは下に伸びる分岐縦棒グラフ）
   - 対局コメント（履歴から各対局に一言メモを後から追記可能。短文はそのまま表示、長文は折りたたみ）
   - コメントへのリアクション（👍😄😮🔥の4種。誰が押したかFirebaseで全員に同期）
@@ -262,16 +262,16 @@
         <p class="note">ペアごとの手合いを手動で設定します。使い始めや手合いを直接変更したい時にお使いください。</p>
         <div id="level-settings"></div>
         <button class="btn" id="save-levels" style="background:#b89752">手合いを保存して同期</button>
-        <p class="note" style="margin-top:8px">※ 対局記録を修正・削除すると手合いレベルと連勝数は自動で再計算されます。手動で直接変更したい場合はここを使ってください。</p>
+        <p class="note" style="margin-top:8px">※ 対局記録を修正・削除すると手合いと連勝数は自動で再計算されます。手動で直接変更したい場合はここを使ってください。</p>
 
         <h3 style="margin-top:24px">シーズン管理</h3>
-        <p class="note">対局履歴と連勝カウントをリセットします。手合いレベルは引き継ぎます。</p>
+        <p class="note">対局履歴と連勝カウントをリセットします。手合いは引き継ぎます。</p>
         <div id="season-info" style="margin-bottom:12px;font-size:0.9rem;color:#2c3e50"></div>
         <button class="btn" id="season-reset" style="background:#e74c3c">新シーズンを始める</button>
         <div id="past-seasons" style="margin-top:16px"></div>
 
         <h3 style="margin-top:24px">完全リセット</h3>
-        <p class="note">テスト中など、すべてをやり直したいときに使います。履歴・アーカイブ・シーズン番号をすべて消去してシーズン1に戻します。手合いレベルは保持されます。</p>
+        <p class="note">テスト中など、すべてをやり直したいときに使います。履歴・アーカイブ・シーズン番号をすべて消去してシーズン1に戻します。手合いは保持されます。</p>
         <button class="btn" id="full-reset" style="background:#888">シーズン1からやり直す</button>
 
         <h3 style="margin-top:24px">データエクスポート</h3>
@@ -283,7 +283,7 @@
     <!-- 結果入力 -->
     <div class="panel" id="panel-input">
       <h3>結果入力</h3>
-      <p class="note">※ 同じ日に複数対局した場合は、対局した順番に登録してください。</p>
+      <p style="font-size:0.85rem;font-weight:bold;color:#7a4a00;background:#fff3cd;border:1px solid #ffdd80;border-left:4px solid #e0a300;border-radius:6px;padding:8px 10px;margin:0 0 14px">⚠️ 同じ日に複数対局した場合は、対局した順番に登録してください。</p>
       <div class="fg">
         <label>対局日</label>
         <input type="date" id="match-date">
@@ -438,7 +438,7 @@ const firebaseConfig = {
 let state = {
   players: ["対局者1", "対局者2", "対局者3", "対局者4", "対局者5", "対局者6"],
   history: [],
-  levels:  {},  // ペアごとの手合いレベル { "西|山田": 1, ... }
+  levels:  {},  // ペアごとの手合い { "西|山田": 1, ... }
   streaks: {},  // ペアごとの現在の連勝数  { "西|山田": 3, ... }
   season:  1    // 現在のシーズン番号
 };
@@ -470,6 +470,7 @@ if (isConfigured) {
         if (Object.keys(state.levels).length === 0 && state.history.length > 0) {
           migrateFromHistory();
         }
+        verifyAndFixLevelsStreaks();
         if (!editingPlayers) fillPlayerInputs();
         renderAll();
       }
@@ -482,6 +483,37 @@ if (isConfigured) {
 } else {
   document.getElementById("setup-banner").style.display = "block";
   setSyncStatus(false);
+}
+
+// levelsStreaksの整合性を1回だけ検証し、対局日ベースの再計算と食い違いがあれば
+// 自動補正した上でユーザーに知らせる（バックデート登録による段位ズレの救済用）
+let levelsStreaksVerified = false;
+function verifyAndFixLevelsStreaks() {
+  if (levelsStreaksVerified) return;
+  levelsStreaksVerified = true;
+  if (!state.history || state.history.length === 0) return;
+
+  const recalculated = { levels: {}, streaks: {} };
+  chronologicalHistory().forEach(m => updateLevelsAndStreaks(m, recalculated));
+
+  const allKeys = new Set([...Object.keys(state.levels || {}), ...Object.keys(recalculated.levels)]);
+  const diffs = [];
+  allKeys.forEach(key => {
+    const oldL = state.levels[key]  || 0;
+    const newL = recalculated.levels[key]  || 0;
+    const oldS = state.streaks[key] || 0;
+    const newS = recalculated.streaks[key] || 0;
+    if (oldL !== newL || oldS !== newS) {
+      diffs.push(`${key}：手合い ${oldL}→${newL}／連勝 ${oldS}→${newS}`);
+    }
+  });
+
+  if (diffs.length > 0) {
+    state.levels  = recalculated.levels;
+    state.streaks = recalculated.streaks;
+    pushState();
+    alert("対局日の並び順をもとに手合い・連勝数を再計算した結果、以下のペアにズレが見つかったため自動補正しました。\n\n" + diffs.join("\n"));
+  }
 }
 
 function pushState() {
@@ -711,7 +743,7 @@ document.getElementById("add-match").addEventListener("click", () => {
     .sort((a,b) => b.wins - a.wins || a.losses - b.losses)
     .map(p => ({ ...p }));
   state.history.unshift(m);
-  updateLevelsAndStreaks(m);
+  recalcAllLevelsAndStreaks();
   pushState();
   resetInputForm();
 });
@@ -876,6 +908,28 @@ let selectedPlayers = [];
 let lastSorted = []; // 順位変動比較用
 let sortMode = "wins";
 const REACTION_EMOJIS = ["👍","😄","😮","🔥"];
+// "YYYY/M/D" 形式の日付文字列を比較可能な数値に変換（不正・欠損時は0）
+function dateSortValue(dateStr) {
+  if (!dateStr) return 0;
+  const parts = dateStr.split(" ")[0].split("/").map(n => parseInt(n, 10));
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    const [y, mo, dy] = parts;
+    return y * 10000 + mo * 100 + dy;
+  }
+  if (parts.length === 2 && !parts.some(isNaN)) {
+    const y = new Date().getFullYear();
+    const [mo, dy] = parts;
+    return y * 10000 + mo * 100 + dy;
+  }
+  return 0;
+}
+function linkify(str) {
+  return String(str).replace(/(https?:\/\/[^\s<]+)/g, url => {
+    const clean = url.replace(/[)\].,、。]+$/, "");
+    const trail = url.slice(clean.length);
+    return `<a href="${clean}" target="_blank" rel="noopener noreferrer" style="color:#2c6ea3;text-decoration:underline">${clean}</a>${trail}`;
+  });
+}
 
 function getMatchPlayers(m) {
   // 登録順で固定した [左対局者, 右対局者, 左が勝者か]
@@ -1120,12 +1174,7 @@ function matchListHTML(filtered, anchorPlayer) {
         `<button class="reaction-name-btn" data-id="${m.id || idx}" data-name="${p}" style="background:#f0ede4;border:1px solid #ddd;border-radius:6px;padding:3px 10px;font-size:0.8rem;cursor:pointer">${p}</button>`
       ).join("");
 
-      const commentBody = text.length <= 30
-        ? `<div style="font-size:0.8rem;color:#666;font-style:italic">💬 ${body}</div>`
-        : `<details style="font-size:0.8rem;color:#666">
-             <summary style="cursor:pointer;list-style:none;font-style:italic">💬 ${body.slice(0,30)}…</summary>
-             <div style="margin-top:4px;white-space:pre-wrap;font-style:italic">${body}</div>
-           </details>`;
+      const commentBody = `<div style="font-size:0.8rem;color:#666;font-style:italic;white-space:pre-wrap">💬 ${linkify(body)}</div>`;
 
       return `
         <div class="hist-comment" data-id="${m.id || idx}" style="margin-top:6px">
@@ -1194,7 +1243,9 @@ function renderHistory() {
         return left === selectedPlayers[0] || right === selectedPlayers[0];
       return (left === selectedPlayers[0] && right === selectedPlayers[1]) ||
              (left === selectedPlayers[1] && right === selectedPlayers[0]);
-    });
+    })
+    // 対局日の新しい順に表示（同じ日付なら登録順＝同日内の対局順を維持）
+    .sort((a, b) => dateSortValue(b.m.date) - dateSortValue(a.m.date));
 
   // ===== 未選択: 全体表示 =====
   if (selectedPlayers.length === 0) {
@@ -1390,7 +1441,7 @@ function pairKey(pA, pB) {
 
 // 既存履歴からlevels/streaksを計算して移行（後方互換用）
 function calcFromHistory(pA, pB) {
-  const matches = [...state.history].reverse().filter(m => {
+  const matches = chronologicalHistory().filter(m => {
     if (m.type === "jigo") return (m.p1===pA&&m.p2===pB)||(m.p1===pB&&m.p2===pA);
     return (m.winner===pA&&m.loser===pB)||(m.winner===pB&&m.loser===pA);
   });
@@ -1420,7 +1471,10 @@ function migrateFromHistory() {
 }
 
 // 対局登録後にlevels/streaksを更新する
-function updateLevelsAndStreaks(m) {
+// target省略時はstate.levels/state.streaksを直接更新（従来動作）
+function updateLevelsAndStreaks(m, target) {
+  const levels  = target ? target.levels  : state.levels;
+  const streaks = target ? target.streaks : state.streaks;
   let winner;
   if (m.type === "jigo") {
     winner = jigoWinner(m);
@@ -1435,17 +1489,24 @@ function updateLevelsAndStreaks(m) {
   // キーの左側プレイヤー（インデックスが小さい方）を基準にstreakの符号を決める
   const leftP = ps.indexOf(pA) <= ps.indexOf(pB) ? pA : pB;
 
-  const cur = state.streaks[key] || 0;
+  const cur = streaks[key] || 0;
   let newStreak;
   if (winner === leftP) newStreak = cur >= 0 ? cur + 1 : 1;
   else                  newStreak = cur <= 0 ? cur - 1 : -1;
 
-  let newLevel = state.levels[key] || 0;
+  let newLevel = levels[key] || 0;
   if (newStreak >= 3)       { newLevel++; newStreak = 0; }
   else if (newStreak <= -3) { newLevel--; newStreak = 0; }
 
-  state.levels[key]  = newLevel;
-  state.streaks[key] = newStreak;
+  levels[key]  = newLevel;
+  streaks[key] = newStreak;
+}
+
+// state.historyを対局日の昇順（古い→新しい）に並べる。
+// 同日内は登録順（従来のunshift順を維持）をタイブレークにする。
+function chronologicalHistory() {
+  return [...state.history].reverse()
+    .sort((a, b) => dateSortValue(a.date) - dateSortValue(b.date));
 }
 
 // levelだけを返す（autoFillTeai・renderHandicap用）
@@ -1562,7 +1623,7 @@ document.getElementById("season-reset").addEventListener("click", async () => {
   if (!confirm(
     `シーズン${state.season}を終了して新シーズンを始めます。\n` +
     `対局履歴と連勝カウントをリセットします。\n` +
-    `手合いレベルは引き継ぎます。\n\nよろしいですか？`
+    `手合いは引き継ぎます。\n\nよろしいですか？`
   )) return;
 
   // 現在のシーズンデータをFirebaseに保存
@@ -1589,7 +1650,7 @@ document.getElementById("season-reset").addEventListener("click", async () => {
 
 // ---------- 完全リセット ----------
 document.getElementById("full-reset").addEventListener("click", () => {
-  if (!confirm("履歴・アーカイブ・シーズン番号をすべて消去してシーズン1に戻します。\n手合いレベルは保持されます。\nこの操作は取り消せません。本当によいですか？")) return;
+  if (!confirm("履歴・アーカイブ・シーズン番号をすべて消去してシーズン1に戻します。\n手合いは保持されます。\nこの操作は取り消せません。本当によいですか？")) return;
   if (seasonsRef) seasonsRef.remove();
   state.season  = 1;
   state.history = [];
@@ -1607,7 +1668,7 @@ document.getElementById("export-btn").addEventListener("click", () => {
     const data = snap.val();
     if (!data) { showToast("エクスポートするデータがありません"); return; }
     const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const date = new Date().toISOString().slice(0, 10);
@@ -1755,8 +1816,8 @@ function recalcAllLevelsAndStreaks() {
   // 全ペアをリセット
   state.levels  = {};
   state.streaks = {};
-  // historyは新しい順（unshift）で積まれているため逆順で処理
-  [...state.history].reverse().forEach(m => {
+  // 対局日の昇順（古い→新しい）で処理する
+  chronologicalHistory().forEach(m => {
     updateLevelsAndStreaks(m);
   });
 }
