@@ -819,14 +819,19 @@ function renderWinsChart() {
         const wH = Math.round(p.wins   / maxWins   * TOP_H);
         const lH = Math.round(p.losses / maxLosses * BOT_H);
         const jH = Math.round(p.jigo   / maxLosses * BOT_H);
+        // バーの高さが低く、内側に数字が収まらない場合は外側に表示する
+        const winsInside   = wH >= 16;
+        const lossesInside = lH >= 16;
+        const jigoInside   = jH >= 14;
         return `
           <div style="flex:1;display:flex;flex-direction:column;align-items:center">
 
             <!-- 勝ちバー（上方向） -->
-            <div style="height:${TOP_H}px;width:100%;display:flex;flex-direction:column;justify-content:flex-end">
+            <div style="height:${TOP_H}px;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
               ${p.wins > 0 ? `
-                <div style="height:${wH}px;background:#2e7d5e;border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center">
-                  ${wH >= 16 ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.wins}</span>` : ""}
+                ${!winsInside ? `<div style="font-size:0.68rem;color:#2e7d5e;font-weight:bold;margin-bottom:1px">${p.wins}</div>` : ""}
+                <div style="height:${wH}px;width:100%;background:#2e7d5e;border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center">
+                  ${winsInside ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.wins}</span>` : ""}
                 </div>` : ""}
             </div>
 
@@ -838,12 +843,14 @@ function renderWinsChart() {
             <div style="height:${BOT_H}px;width:100%;display:flex;flex-direction:column;align-items:stretch">
               ${p.losses > 0 ? `
                 <div style="height:${lH}px;background:#c0392b;border-radius:0 0 4px 4px;display:flex;align-items:center;justify-content:center">
-                  ${lH >= 16 ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.losses}</span>` : ""}
-                </div>` : ""}
+                  ${lossesInside ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.losses}</span>` : ""}
+                </div>
+                ${!lossesInside ? `<div style="font-size:0.68rem;color:#c0392b;font-weight:bold;text-align:center;margin-top:1px">${p.losses}</div>` : ""}` : ""}
               ${p.jigo > 0 ? `
                 <div style="height:${jH}px;background:#aaa;border-radius:0 0 4px 4px;display:flex;align-items:center;justify-content:center;margin-top:2px">
-                  ${jH >= 14 ? `<span style="color:#fff;font-size:0.7rem">${p.jigo}持</span>` : ""}
-                </div>` : ""}
+                  ${jigoInside ? `<span style="color:#fff;font-size:0.7rem">${p.jigo}持</span>` : ""}
+                </div>
+                ${!jigoInside ? `<div style="font-size:0.66rem;color:#888;font-weight:bold;text-align:center;margin-top:1px">${p.jigo}持</div>` : ""}` : ""}
             </div>
 
           </div>`;
