@@ -1265,7 +1265,7 @@ function renderHistory() {
   // ===== 1人選択: 個人視点 =====
   } else if (selectedPlayers.length === 1) {
     const player = selectedPlayers[0];
-    const recent = allFiltered.slice(0, 10);
+    const recent = allFiltered;
     const { w, l, j } = flowStats(recent, player);
     const jigoStr = j > 0 ? ` ${j}持碁` : "";
 
@@ -1281,21 +1281,16 @@ function renderHistory() {
     const oppHTML = Object.entries(opponents).map(([opp, matches]) => {
       const { w: ow, l: ol, j: oj } = flowStats(matches, player);
       const jigoStr2 = oj > 0 ? ` ${oj}持碁` : "";
-      const limit = 10;
-      const displayMatches = matches.slice(0, limit);
-      const flow = flowSymbolsHTML(displayMatches, player);
-      const recentNote = matches.length > limit
-        ? `<div style="font-size:0.75rem;color:#aaa;margin-top:2px">直近${limit}局</div>` : "";
+      const flow = flowSymbolsHTML(matches, player);
       return `<div style="padding:8px 0;border-bottom:1px solid #f0ede3">
         <div><strong>vs ${opp}</strong>　${ow}勝 ${ol}敗${jigoStr2}</div>
         <div style="flex-wrap:wrap;margin-top:4px;letter-spacing:3px">${flow}</div>
-        ${recentNote}
       </div>`;
     }).join("");
 
     let html = '';
     // 最近の流れ
-    html += sectionHead("最近の流れ（直近10局）");
+    html += sectionHead("最近の流れ");
     html += `<div style="background:#f9f8f4;border-radius:6px;padding:12px 14px;margin-bottom:4px">
       <div style="letter-spacing:4px;margin-bottom:6px">${flowSymbolsHTML(recent, player)}</div>
       <div style="font-size:0.85rem;color:#666">${w}勝 ${l}敗${jigoStr}（${recent.length}局）</div>
@@ -1316,13 +1311,13 @@ function renderHistory() {
   // ===== 2人選択: ペア視点 =====
   } else {
     const [pA, pB] = selectedPlayers;
-    const recent = allFiltered.slice(0, 10);
+    const recent = allFiltered;
     const { w, l, j } = flowStats(recent, pA);
     const jigoStr = j > 0 ? ` ${j}持碁` : "";
 
     let html = recordBanner(allFiltered);
     // 最近の流れ
-    html += sectionHead(`最近の流れ（直近10局・${pA}視点）`);
+    html += sectionHead(`最近の流れ（${pA}視点）`);
     html += `<div style="background:#f9f8f4;border-radius:6px;padding:12px 14px;margin-bottom:4px">
       <div style="letter-spacing:4px;margin-bottom:6px">${flowSymbolsHTML(recent, pA)}</div>
       <div style="font-size:0.85rem;color:#666">${pA} ${w}勝 ${l}敗${jigoStr}（${recent.length}局）</div>
@@ -1558,7 +1553,7 @@ function calcPairHandicap(pA, pB) {
     const leader = streak > 0 ? pA : pB;
     const absStreak = Math.abs(streak);
     // プログレスバー：●が連勝数、○が残り
-    const filled = Array(absStreak).fill(`<span style="color:#2c3e50;font-size:1rem">●</span>`).join("");
+    const filled = Array(absStreak).fill(`<span style="color:#2e7d5e;font-size:1rem">●</span>`).join("");
     const empty  = Array(remain).fill(`<span style="color:#ccc;font-size:1rem">○</span>`).join("");
     statusStr = `
       <div style="font-size:0.82rem;color:#2c3e50;font-weight:bold">${leader} ${absStreak}連勝中</div>
