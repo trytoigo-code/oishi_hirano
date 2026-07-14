@@ -1007,12 +1007,12 @@ function renderGonosata() {
     .map(p => ({ name: p, info: lastPlayed[p] }))
     .sort((a, b) => (a.info ? a.info.val : -1) - (b.info ? b.info.val : -1));
 
-  // 経過日数に応じた絵文字と色（数字が大きい＝ご無沙汰なほど強調）
-  function severity(diffDays) {
-    if (diffDays === null || diffDays >= 30) return { emoji: "🕸️", color: "#c0392b" };
-    if (diffDays >= 14) return { emoji: "💤", color: "#e67e22" };
-    if (diffDays >= 7)  return { emoji: "😪", color: "#b89752" };
-    return { emoji: "😊", color: "#2e7d5e" };
+  // 経過日数に応じて😴の数を決める（多いほどご無沙汰）。余裕があれば😊
+  function sleepyMarks(diffDays) {
+    if (diffDays === null || diffDays >= 30) return "😴😴😴";
+    if (diffDays >= 14) return "😴😴";
+    if (diffDays >= 7)  return "😴";
+    return "😊";
   }
 
   el.innerHTML = rows.map((r, i) => {
@@ -1025,26 +1025,14 @@ function renderGonosata() {
     } else {
       daysStr = "対局記録なし";
     }
-    const { emoji, color } = severity(r.info ? diffDays : null);
-
-    // 一番ご無沙汰な人（先頭）だけ目立つカードで表示
-    if (i === 0) {
-      return `
-        <div style="background:#fff3cd;border:1px solid #ffdd80;border-left:4px solid #e0a300;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px">
-          <div style="font-size:1.8rem;line-height:1">${emoji}</div>
-          <div>
-            <div style="font-weight:bold;color:#7a4a00;font-size:1rem">${r.name}</div>
-            <div style="font-size:0.82rem;color:#7a4a00;margin-top:2px">${dateLabel ? `${dateLabel}　` : ""}<strong>${daysStr}</strong></div>
-          </div>
-        </div>`;
-    }
+    const marks = sleepyMarks(r.info ? diffDays : null);
 
     return `
       <div class="rank-row">
-        <div class="rank-num" style="font-size:1.3rem">${emoji}</div>
+        <div class="rank-num">${i + 1}</div>
         <div class="rank-info">
-          <div><strong>${r.name}</strong></div>
-          <div class="rank-record">${dateLabel ? `${dateLabel}　` : ""}<span style="color:${color};font-weight:bold">${daysStr}</span></div>
+          <div><strong>${r.name}</strong> <span style="letter-spacing:1px">${marks}</span></div>
+          <div class="rank-record">${dateLabel ? `${dateLabel}　` : ""}${daysStr}</div>
         </div>
       </div>`;
   }).join("");
