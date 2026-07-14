@@ -42,7 +42,7 @@
   - 結果入力（中押し・時間切れ・目数差・持碁）
   - 順位表示（勝数順/勝率順の切り替え対応）
   - 対局履歴（多視点表示・修正機能付き）
-      全体：全対局の記録
+      全体：決着内容の内訳（全体）・全対局の記録
       1人選択：最近の流れ・相手別成績・決着内容・対局履歴
       2人選択：最近の流れ・決着内容・直接対局履歴
   - 手合い自動計算（3連勝で手合い変更、多段階対応）
@@ -1139,24 +1139,17 @@ function winRate(w, l) {
   return `（${(w / total).toFixed(2)}）`;
 }
 
+// 2人選択時の対戦成績バナー
 function recordBanner(filtered) {
   const rec = calcRecord(filtered);
-  if (selectedPlayers.length === 2) {
-    const [leftP, rightP] = selectedPlayers;
-    const lw = rec[leftP]?.wins ?? 0, ll = rec[leftP]?.losses ?? 0;
-    const rw = rec[rightP]?.wins ?? 0, rl = rec[rightP]?.losses ?? 0;
-    return `<div style="background:#f1f0ea;border:1px solid #e0dbcd;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:0.9rem;color:#2c3e50;display:flex;justify-content:space-around;text-align:center">
-      <div><strong>${leftP}</strong><br>${lw}勝 ${ll}敗${winRate(lw, ll)}</div>
-      <div style="color:#999;align-self:center">vs</div>
-      <div><strong>${rightP}</strong><br>${rw}勝 ${rl}敗${winRate(rw, rl)}</div>
-    </div>`;
-  } else {
-    const targets = selectedPlayers.length === 1 ? [selectedPlayers[0]] : state.players;
-    const rows = targets.map(p =>
-      `<span style="margin-right:12px"><strong>${p}</strong> ${rec[p]?.wins??0}勝 ${rec[p]?.losses??0}敗${winRate(rec[p]?.wins??0, rec[p]?.losses??0)}</span>`
-    ).join("");
-    return `<div style="background:#f1f0ea;border:1px solid #e0dbcd;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#2c3e50;line-height:2">${rows}</div>`;
-  }
+  const [leftP, rightP] = selectedPlayers;
+  const lw = rec[leftP]?.wins ?? 0, ll = rec[leftP]?.losses ?? 0;
+  const rw = rec[rightP]?.wins ?? 0, rl = rec[rightP]?.losses ?? 0;
+  return `<div style="background:#f1f0ea;border:1px solid #e0dbcd;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:0.9rem;color:#2c3e50;display:flex;justify-content:space-around;text-align:center">
+    <div><strong>${leftP}</strong><br>${lw}勝 ${ll}敗${winRate(lw, ll)}</div>
+    <div style="color:#999;align-self:center">vs</div>
+    <div><strong>${rightP}</strong><br>${rw}勝 ${rl}敗${winRate(rw, rl)}</div>
+  </div>`;
 }
 
 // 対局結果を1人視点で ○●△ に変換
@@ -1233,6 +1226,41 @@ function decisionBreakdownHTML(matches, player) {
   if (types.jikan.length) html += `<div>時間切れ　${types.jikan.length}局　（${wl(types.jikan)}）</div>`;
   if (types.jigo.length)  html += `<div>持碁　${types.jigo.length}局　（${wl(types.jigo)}）</div>`;
   if (types.fumei.length) html += `<div>不明　${types.fumei.length}局　（${wl(types.fumei)}）</div>`;
+  html += '</div>';
+  return html;
+}
+
+// 決着内容HTML（全体版：個人の勝敗ではなく、対局全体の内訳と割合を表示）
+function decisionBreakdownOverallHTML(matches) {
+  if (matches.length === 0) return '<p style="color:#999">対局記録なし</p>';
+
+  const types = { chuoshi:0, moku:0, jikan:0, jigo:0, fumei:0 };
+  let hanme = 0, komi = 0;
+
+  matches.forEach(({ m }) => {
+    if (types[m.type] !== undefined) types[m.type]++;
+    if (m.type === "moku") {
+      if (m.mokusuu === 0.5) hanme++;
+      else if (m.mokusuu <= 6.5) komi++;
+    }
+  });
+
+  const total = matches.length;
+  const pct = n => total ? Math.round(n / total * 100) : 0;
+  const sub = (label, n) =>
+    n ? `<div style="padding-left:16px;color:#777;font-size:0.78rem">うち${label}　${n}局</div>` : "";
+
+  let html = '<div style="background:#f1f0ea;border:1px solid #e0dbcd;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.86rem;color:#2c3e50;line-height:1.9">';
+  html += `<div style="font-size:0.72rem;color:#999;font-family:sans-serif;margin-bottom:2px">決着内容（全${total}局）</div>`;
+  if (types.chuoshi) html += `<div>中押し　${types.chuoshi}局　（${pct(types.chuoshi)}%）</div>`;
+  if (types.moku) {
+    html += `<div>目数差　${types.moku}局　（${pct(types.moku)}%）</div>`;
+    html += sub("半目", hanme);
+    html += sub("コミ以内", komi);
+  }
+  if (types.jikan) html += `<div>時間切れ　${types.jikan}局　（${pct(types.jikan)}%）</div>`;
+  if (types.jigo)  html += `<div>持碁　${types.jigo}局　（${pct(types.jigo)}%）</div>`;
+  if (types.fumei) html += `<div>不明　${types.fumei}局　（${pct(types.fumei)}%）</div>`;
   html += '</div>';
   return html;
 }
@@ -1368,7 +1396,7 @@ function renderHistory() {
       el.innerHTML = '<p style="color:#999">対局記録はありません。</p>';
       return;
     }
-    el.innerHTML = recordBanner(allFiltered) + matchListHTML(allFiltered);
+    el.innerHTML = decisionBreakdownOverallHTML(allFiltered) + matchListHTML(allFiltered);
 
   // ===== 1人選択: 個人視点 =====
   } else if (selectedPlayers.length === 1) {
