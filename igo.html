@@ -1285,10 +1285,10 @@ function matchListHTML(filtered, anchorPlayer) {
       const jw = jigoWinner(m);
       if (jw) effectiveWinner = jw === left ? "left" : "right";
     }
-    const leftName  = effectiveWinner === "left"  ? `<strong>${left}</strong>${teai(leftTeai)} 👑`
+    const leftName  = effectiveWinner === "left"  ? `👑 <strong>${left}</strong>${teai(leftTeai)}`
                     : effectiveWinner === "right" ? `${left}${teai(leftTeai)}`
                     : `<strong>${left}</strong>${teai(leftTeai)}`;
-    const rightName = effectiveWinner === "right" ? `<strong>${right}</strong>${teai(rightTeai)} 👑`
+    const rightName = effectiveWinner === "right" ? `👑 <strong>${right}</strong>${teai(rightTeai)}`
                     : effectiveWinner === "left"  ? `${right}${teai(rightTeai)}`
                     : `<strong>${right}</strong>${teai(rightTeai)}`;
     const commentHTML = (() => {
