@@ -53,6 +53,8 @@
   - 管理者メニュー（折りたたみ式・対局者設定・初期手合い設定・シーズン管理を収録）
   - 完全リセット（履歴・アーカイブ・シーズン番号を消去してシーズン1に戻す。手合いは保持）
   - 勝敗グラフ（順位タブ最上部。名前をベースラインに勝ちバーは上・負けバーは下に伸びる分岐縦棒グラフ）
+  - ご無沙汰ランキング（順位タブ。最後に対局した日が古い人ほど上位に表示）
+  - 半目職人ランキング（順位タブ。半目差での勝利数。半目勝ちが1件も無い間は非表示）
   - 対局コメント（履歴から各対局に一言メモを後から追記可能。短文はそのまま表示、長文は折りたたみ）
   - コメントへのリアクション（👍😄😮🔥の4種。誰が押したかFirebaseで全員に同期）
   - Firebase によるリアルタイム同期
@@ -224,7 +226,7 @@
 
   <!-- Tabs -->
   <div id="nav">
-    <button class="tab-btn active" data-tab="standings">🏆順位</button>
+    <button class="tab-btn active" data-tab="standings">🏆順位表</button>
     <button class="tab-btn" data-tab="input">📝結果入力</button>
     <button class="tab-btn" data-tab="history">📜履歴</button>
     <button class="tab-btn" data-tab="handicap">🤝手合い</button>
@@ -335,6 +337,16 @@
         <button class="filter-btn" id="sort-rate">勝率順</button>
       </div>
       <div id="rank-list"></div>
+
+      <h3 style="margin-top:24px">😴 ご無沙汰ランキング</h3>
+      <p class="note">最後に対局した日が古い順。そろそろ誘ってみては？</p>
+      <div id="gonosata-list"></div>
+
+      <div id="hanme-section" style="display:none">
+        <h3 style="margin-top:24px">🎯 半目職人</h3>
+        <p class="note">半目差での勝利数ランキング。</p>
+        <div id="hanme-list"></div>
+      </div>
 
     </div>
 
@@ -775,6 +787,8 @@ function renderAll() {
   buildSelects();
   renderWinsChart();
   renderStandings();
+  renderGonosata();
+  renderHanme();
   renderHistory();
   renderHandicap();
   renderLevelSettings();
@@ -783,7 +797,7 @@ function renderAll() {
 
 function calcStats() {
   const s = {};
-  state.players.forEach(p => s[p] = { name:p, wins:0, losses:0, jigo:0, total:0 });
+  state.players.forEach(p => s[p] = { name:p, wins:0, losses:0, total:0 });
   state.history.forEach(m => {
     if (m.type === "jigo") {
       const jw = jigoWinner(m);
@@ -808,8 +822,8 @@ function renderWinsChart() {
   if (stats.every(p => p.total === 0)) { el.innerHTML = ""; return; }
 
   // 勝ち負けで別々の基準にすると、本数の大小が見た目と対応しなくなるため、
-  // 共通の最大値・共通の枠高さでスケーリングする（持碁も同じ基準）
-  const commonMax = Math.max(...stats.map(p => p.wins), ...stats.map(p => p.losses), ...stats.map(p => p.jigo), 1);
+  // 共通の最大値・共通の枠高さでスケーリングする
+  const commonMax = Math.max(...stats.map(p => p.wins), ...stats.map(p => p.losses), 1);
   const AREA_H = 110; // 勝ち・負け共通のエリア高さ(px)
 
   el.innerHTML = `
@@ -818,11 +832,9 @@ function renderWinsChart() {
       ${stats.map(p => {
         const wH = Math.round(p.wins   / commonMax * AREA_H);
         const lH = Math.round(p.losses / commonMax * AREA_H);
-        const jH = Math.round(p.jigo   / commonMax * AREA_H);
         // バーの高さが低く、内側に数字が収まらない場合は外側に表示する
         const winsInside   = wH >= 16;
         const lossesInside = lH >= 16;
-        const jigoInside   = jH >= 14;
         return `
           <div style="flex:1;display:flex;flex-direction:column;align-items:center">
 
@@ -846,11 +858,6 @@ function renderWinsChart() {
                   ${lossesInside ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.losses}</span>` : ""}
                 </div>
                 ${!lossesInside ? `<div style="font-size:0.68rem;color:#c0392b;font-weight:bold;text-align:center;margin-top:1px">${p.losses}</div>` : ""}` : ""}
-              ${p.jigo > 0 ? `
-                <div style="height:${jH}px;background:#aaa;border-radius:0 0 4px 4px;display:flex;align-items:center;justify-content:center;margin-top:2px">
-                  ${jigoInside ? `<span style="color:#fff;font-size:0.7rem">${p.jigo}持</span>` : ""}
-                </div>
-                ${!jigoInside ? `<div style="font-size:0.66rem;color:#888;font-weight:bold;text-align:center;margin-top:1px">${p.jigo}持</div>` : ""}` : ""}
             </div>
 
           </div>`;
@@ -859,7 +866,6 @@ function renderWinsChart() {
     <div style="display:flex;gap:12px;margin-top:8px;font-size:0.72rem;color:#777">
       <span><span style="display:inline-block;width:10px;height:10px;background:#2e7d5e;border-radius:2px;margin-right:3px"></span>勝（上）</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#c0392b;border-radius:2px;margin-right:3px"></span>敗（下）</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#aaa;border-radius:2px;margin-right:3px"></span>持碁</span>
     </div>`;
 }
 
@@ -880,8 +886,7 @@ function renderStandings() {
   const prevOrder = lastSorted.map(p => p.name);
 
   document.getElementById("rank-list").innerHTML = sorted.map((p,i) => {
-    const pct = Math.min((p.total/10)*100, 100);
-    const jigoStr = p.jigo > 0 ? ` ${p.jigo}持碁` : "";
+    const pct = Math.min((p.total/100)*100, 100);
     const prevRank = prevOrder.indexOf(p.name);
     let badge = "";
     if (prevOrder.length > 0 && prevRank !== -1) {
@@ -895,7 +900,7 @@ function renderStandings() {
         <div class="rank-num">${medals[i] || (i+1)}</div>
         <div class="rank-info">
           <div><strong>${p.name}</strong> ${badge}
-          <span class="rank-record"> ${p.wins}勝 ${p.losses}敗${jigoStr}${winRate(p.wins, p.losses)}</span></div>
+          <span class="rank-record"> ${p.wins}勝 ${p.losses}敗${winRate(p.wins, p.losses)}</span></div>
           <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
       </div>`;
@@ -930,6 +935,99 @@ function dateSortValue(dateStr) {
   }
   return 0;
 }
+
+// 対局日文字列("YYYY/M/D")をDateオブジェクトに変換（不正時はnull）
+function parseMatchDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split(" ")[0].split("/").map(n => parseInt(n, 10));
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  return null;
+}
+
+// 半目職人ランキング：半目差（0.5目）での勝利数。
+// 半目勝ちが1件も無いうちはセクションごと非表示にする。
+function renderHanme() {
+  const section = document.getElementById("hanme-section");
+  const el = document.getElementById("hanme-list");
+  if (!section || !el) return;
+
+  const counts = {};
+  state.players.forEach(p => counts[p] = 0);
+  state.history.forEach(m => {
+    if (m.type === "moku" && m.mokusuu === 0.5 && counts[m.winner] !== undefined) {
+      counts[m.winner]++;
+    }
+  });
+
+  const rows = state.players
+    .map(p => ({ name: p, count: counts[p] }))
+    .filter(r => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  if (rows.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "";
+
+  const medals = ["🥇","🥈","🥉"];
+  el.innerHTML = rows.map((r, i) => `
+    <div class="rank-row">
+      <div class="rank-num">${medals[i] || (i + 1)}</div>
+      <div class="rank-info">
+        <div><strong>${r.name}</strong></div>
+        <div class="rank-record">半目勝ち ${r.count}回</div>
+      </div>
+    </div>`).join("");
+}
+
+// ご無沙汰ランキング：最後に対局した日が古い人ほど上位に表示する
+function renderGonosata() {
+  const el = document.getElementById("gonosata-list");
+  if (!el) return;
+
+  const lastPlayed = {};
+  state.players.forEach(p => lastPlayed[p] = null);
+
+  state.history.forEach(m => {
+    const involved = m.type === "jigo" ? [m.p1, m.p2] : [m.winner, m.loser];
+    const val = dateSortValue(m.date);
+    involved.forEach(p => {
+      if (!(p in lastPlayed)) return;
+      if (!lastPlayed[p] || val > lastPlayed[p].val) {
+        lastPlayed[p] = { val, date: m.date };
+      }
+    });
+  });
+
+  const today = new Date();
+  const rows = state.players
+    .map(p => ({ name: p, info: lastPlayed[p] }))
+    .sort((a, b) => (a.info ? a.info.val : -1) - (b.info ? b.info.val : -1));
+
+  el.innerHTML = rows.map((r, i) => {
+    let sub;
+    if (r.info) {
+      const d = parseMatchDate(r.info.date);
+      const diffDays = d ? Math.floor((today - d) / (1000 * 60 * 60 * 24)) : null;
+      const daysStr = diffDays === null ? "" : diffDays <= 0 ? "今日" : `${diffDays}日前`;
+      sub = `最終対局：${r.info.date}${daysStr ? `（${daysStr}）` : ""}`;
+    } else {
+      sub = "対局記録なし";
+    }
+    return `
+      <div class="rank-row">
+        <div class="rank-num">${i + 1}</div>
+        <div class="rank-info">
+          <div><strong>${r.name}</strong></div>
+          <div class="rank-record">${sub}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
 function linkify(str) {
   return String(str).replace(/(https?:\/\/[^\s<]+)/g, url => {
     const clean = url.replace(/[)\].,、。]+$/, "");
