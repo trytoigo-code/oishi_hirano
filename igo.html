@@ -807,18 +807,18 @@ function renderWinsChart() {
   const stats = calcStats();
   if (stats.every(p => p.total === 0)) { el.innerHTML = ""; return; }
 
-  const maxWins   = Math.max(...stats.map(p => p.wins),   1);
-  const maxLosses = Math.max(...stats.map(p => p.losses), 1);
-  const TOP_H = 110; // 勝ちエリアの高さ(px)
-  const BOT_H = 80;  // 負けエリアの高さ(px)
+  // 勝ち負けで別々の基準にすると、本数の大小が見た目と対応しなくなるため、
+  // 共通の最大値・共通の枠高さでスケーリングする（持碁も同じ基準）
+  const commonMax = Math.max(...stats.map(p => p.wins), ...stats.map(p => p.losses), ...stats.map(p => p.jigo), 1);
+  const AREA_H = 110; // 勝ち・負け共通のエリア高さ(px)
 
   el.innerHTML = `
     <h3 style="margin-top:0;margin-bottom:12px">勝敗グラフ</h3>
     <div style="display:flex;gap:8px;align-items:stretch">
       ${stats.map(p => {
-        const wH = Math.round(p.wins   / maxWins   * TOP_H);
-        const lH = Math.round(p.losses / maxLosses * BOT_H);
-        const jH = Math.round(p.jigo   / maxLosses * BOT_H);
+        const wH = Math.round(p.wins   / commonMax * AREA_H);
+        const lH = Math.round(p.losses / commonMax * AREA_H);
+        const jH = Math.round(p.jigo   / commonMax * AREA_H);
         // バーの高さが低く、内側に数字が収まらない場合は外側に表示する
         const winsInside   = wH >= 16;
         const lossesInside = lH >= 16;
@@ -827,7 +827,7 @@ function renderWinsChart() {
           <div style="flex:1;display:flex;flex-direction:column;align-items:center">
 
             <!-- 勝ちバー（上方向） -->
-            <div style="height:${TOP_H}px;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
+            <div style="height:${AREA_H}px;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
               ${p.wins > 0 ? `
                 ${!winsInside ? `<div style="font-size:0.68rem;color:#2e7d5e;font-weight:bold;margin-bottom:1px">${p.wins}</div>` : ""}
                 <div style="height:${wH}px;width:100%;background:#2e7d5e;border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center">
@@ -840,7 +840,7 @@ function renderWinsChart() {
             <div style="font-size:0.78rem;font-weight:bold;color:#2c3e50;padding:4px 0;text-align:center">${p.name}</div>
 
             <!-- 負けバー（下方向） -->
-            <div style="height:${BOT_H}px;width:100%;display:flex;flex-direction:column;align-items:stretch">
+            <div style="height:${AREA_H}px;width:100%;display:flex;flex-direction:column;align-items:stretch">
               ${p.losses > 0 ? `
                 <div style="height:${lH}px;background:#c0392b;border-radius:0 0 4px 4px;display:flex;align-items:center;justify-content:center">
                   ${lossesInside ? `<span style="color:#fff;font-size:0.72rem;font-weight:bold">${p.losses}</span>` : ""}
