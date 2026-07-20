@@ -427,7 +427,7 @@
           <option value="">（なし）</option>
         </select>
       </div>
-      <textarea id="edit-comment-text" rows="2" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;resize:vertical" placeholder="一言メモ（任意）"></textarea>
+      <textarea id="edit-comment-text" rows="2" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;resize:vertical;overflow:hidden" placeholder="一言メモ（任意）"></textarea>
     </div>
   </div>
 </div>
@@ -1408,7 +1408,7 @@ function matchListHTML(filtered, anchorPlayer) {
               ${playerOptions}
             </select>
           </div>
-          <textarea class="comment-input" rows="2" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;resize:vertical" placeholder="一言メモを入力…">${savedText}</textarea>
+          <textarea class="comment-input" rows="2" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;resize:vertical;overflow:hidden" placeholder="一言メモを入力…">${savedText}</textarea>
           <div style="display:flex;gap:6px;margin-top:4px;justify-content:flex-end">
             <button class="comment-cancel" data-id="${m.id || idx}" style="background:#f0ede4;border:1px solid #ddd;padding:4px 12px;border-radius:4px;font-size:0.8rem;cursor:pointer">キャンセル</button>
             <button class="comment-save" data-id="${m.id || idx}" style="background:#2c3e50;color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:0.8rem;cursor:pointer">保存</button>
@@ -1538,6 +1538,11 @@ function renderHistory() {
     });
   });
 
+  // コメント入力欄の自動リサイズ（文字数に合わせて高さを伸ばす）
+  el.querySelectorAll(".comment-input").forEach(ta => {
+    ta.addEventListener("input", () => autoGrowTextarea(ta));
+  });
+
   // コメントボタンリスナー
   el.querySelectorAll(".comment-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1548,7 +1553,11 @@ function renderHistory() {
       // 他のフォームを閉じる
       el.querySelectorAll(".comment-form").forEach(f => f.style.display = "none");
       form.style.display = isOpen ? "none" : "";
-      if (!isOpen) form.querySelector(".comment-input").focus();
+      if (!isOpen) {
+        const ta = form.querySelector(".comment-input");
+        ta.focus();
+        autoGrowTextarea(ta);
+      }
     });
   });
 
@@ -1976,6 +1985,7 @@ function openEditModal(m, idx) {
     authorSel.value = "";
     document.getElementById("edit-comment-text").value = existComment;
   }
+  autoGrowTextarea(document.getElementById("edit-comment-text"));
 }
 
 // 結果種別変更で目数差欄を切替
@@ -1994,6 +2004,11 @@ document.getElementById("edit-teai").addEventListener("change", function() {
   } else {
     document.getElementById("edit-teai-pair-row").style.display = "none";
   }
+});
+
+// コメント入力欄の自動リサイズ（文字数に合わせて高さを伸ばす）
+document.getElementById("edit-comment-text").addEventListener("input", function() {
+  autoGrowTextarea(this);
 });
 
 // 保存
@@ -2092,6 +2107,13 @@ function showToast(msg) {
   el.style.display = "flex";
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.style.display = "none"; }, 2500);
+}
+
+// コメント入力欄を、入力中の文字数に合わせて自動で高さを伸ばす
+// （スマホではresize:verticalのつまみをドラッグしづらいため、こちらを主な手段とする）
+function autoGrowTextarea(el) {
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
 }
 
 function showDeleteUndo(delIdx) {
