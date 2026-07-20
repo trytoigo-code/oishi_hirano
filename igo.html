@@ -784,7 +784,7 @@ function resetInputForm() {
   document.getElementById("match-date").value = `${yyyy}-${mm}-${dd}`;
 }
 
-// ---------- Render ----------
+// ---------- Render（全体描画の呼び出し口） ----------
 function renderAll() {
   buildSelects();
   renderWinsChart();
@@ -797,6 +797,7 @@ function renderAll() {
   renderSeasonInfo();
 }
 
+// ---------- 勝敗グラフ・成績集計 ----------
 // 手合い文字列を5分類（互先／先／2子／3子／4子）にまとめる。
 // 互先グループ＝互先・互白・互黒。以降は「先」＝先・向先のように、
 // 下手側の手合いと、その裏返しである上手側の手合い（向〇）を同じ分類にする。
@@ -919,6 +920,7 @@ function bindWinsChartFilterButtons(el) {
   });
 }
 
+// ---------- 順位表 ----------
 function renderStandings() {
   const raw = calcStats();
   const sorted = raw.slice().sort((a,b) => {
@@ -996,6 +998,7 @@ function parseMatchDate(dateStr) {
   return null;
 }
 
+// ---------- ご無沙汰ランキング・半目職人 ----------
 // 半目職人ランキング：半目差（0.5目）での勝利数。
 // 半目勝ちが1件も無いうちはセクションごと非表示にする。
 function renderHanme() {
@@ -1088,6 +1091,9 @@ function renderGonosata() {
   }).join("");
 }
 
+// ---------- 履歴：共通ヘルパー ----------
+// （対局リンク化・対局者の左右振り分け・フィルター・決着内訳・対局カードHTML生成など、
+// 　renderHistory()から使われる補助関数群）
 function linkify(str) {
   return String(str).replace(/(https?:\/\/[^\s<]+)/g, url => {
     const clean = url.replace(/[)\].,、。]+$/, "");
@@ -1110,11 +1116,6 @@ function getMatchPlayers(m) {
       ? { left: m.winner, right: m.loser, leftTeai: m.teai_w, rightTeai: m.teai_l, winner: "left" }
       : { left: m.loser, right: m.winner, leftTeai: m.teai_l, rightTeai: m.teai_w, winner: "right" };
   }
-}
-
-function matchKey(m) {
-  const { left, right } = getMatchPlayers(m);
-  return `${left}|${right}`;
 }
 
 function renderHistoryFilter() {
@@ -1423,6 +1424,8 @@ function sectionHead(title) {
   return `<h4 style="border-left:4px solid #b89752;padding-left:8px;color:#2c3e50;margin:18px 0 10px;font-size:0.95rem">${title}</h4>`;
 }
 
+// ---------- 履歴：メイン描画 ----------
+// 選択中の対局者数（0人／1人／2人）によって表示内容が変わる
 function renderHistory() {
   renderHistoryFilter();
   const el = document.getElementById("history-list");
@@ -1629,6 +1632,7 @@ function renderHistory() {
   });
 }
 
+// ---------- 手合い計算 ----------
 // ペアキー生成: 対局者インデックスの小さい方を左に固定
 function pairKey(pA, pB) {
   const ps = state.players;
