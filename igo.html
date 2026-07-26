@@ -57,6 +57,8 @@
       「先」なら先・向先、「2子」なら2子・向2、というように同じ差の手合いをまとめて集計
   - ご無沙汰ランキング（順位タブ。最後に対局した日が古い人ほど上位に表示）
   - 半目職人ランキング（順位タブ。半目差での勝利数。半目勝ちが1件も無い間は非表示）
+  - 上手・下手成績（順位タブ。手合い差のある対局＝互先を除く、で上手・下手それぞれの勝敗を集計）
+  - 互先 黒白成績（順位タブ。互先のうち色が分かっている対局＝互白・互黒、での黒番・白番の勝敗を集計。色不明の「互先」は対象外）
   - 対局コメント（履歴から各対局に一言メモを後から追記可能。短文はそのまま表示、長文は折りたたみ）
   - コメントへのリアクション（👍😄😮🔥の4種。誰が押したかFirebaseで全員に同期）
   - Firebase によるリアルタイム同期
@@ -349,6 +351,14 @@
         <p class="note">半目差での勝利数ランキング。</p>
         <div id="hanme-list"></div>
       </div>
+
+      <h3 style="margin-top:24px">🎓 上手・下手成績</h3>
+      <p class="note">手合い差のある対局（互先を除く）で、上手・下手それぞれの勝敗。</p>
+      <div id="role-stats-list"></div>
+
+      <h3 style="margin-top:24px">⚫⚪ 互先 黒白成績</h3>
+      <p class="note">互先のうち白番・黒番が分かっている対局の勝敗（色不明の互先は含みません）。</p>
+      <div id="color-stats-list"></div>
 
     </div>
 
@@ -791,6 +801,7 @@ function renderAll() {
   renderStandings();
   renderGonosata();
   renderHanme();
+  renderRoleColorStats();
   renderHistory();
   renderHandicap();
   renderLevelSettings();
@@ -1034,6 +1045,108 @@ function renderHanme() {
         <div class="rank-record">半目勝ち ${r.count}回</div>
       </div>
     </div>`).join("");
+}
+
+// ---------- 上手・下手／互先 黒白 成績 ----------
+// 上手側の手合い（向先・向2・向3・向4）と下手側の手合い（先・2子・3子・4子）
+const UPPER_TEAI = ["向先","向2","向3","向4"];
+const LOWER_TEAI = ["先","2子","3子","4子"];
+
+// 手合い差のある対局（互先を除く）で、各プレイヤーが上手・下手それぞれの
+// 立場で何勝何敗したかを集計する
+function calcRoleStats() {
+  const s = {};
+  state.players.forEach(p => s[p] = { upperW:0, upperL:0, lowerW:0, lowerL:0 });
+  state.history.forEach(m => {
+    if (m.type === "jigo") {
+      // 持碁は下手（黒番）の勝ちとして登録されるため、上手・下手の役割は確定している
+      const jw = jigoWinner(m);
+      if (!jw) return;
+      const jl = jw === m.p1 ? m.p2 : m.p1;
+      const teaiW = jw === m.p1 ? m.teai1 : m.teai2;
+      const teaiL = jw === m.p1 ? m.teai2 : m.teai1;
+      if (LOWER_TEAI.includes(teaiW) && s[jw]) s[jw].lowerW++;
+      if (UPPER_TEAI.includes(teaiL) && s[jl]) s[jl].upperL++;
+    } else {
+      const tw = m.teai_w;
+      if (UPPER_TEAI.includes(tw)) {
+        if (s[m.winner]) s[m.winner].upperW++;
+        if (s[m.loser])  s[m.loser].lowerL++;
+      } else if (LOWER_TEAI.includes(tw)) {
+        if (s[m.winner]) s[m.winner].lowerW++;
+        if (s[m.loser])  s[m.loser].upperL++;
+      }
+      // 互先系（互先・互白・互黒）は上手・下手の区別がないので対象外
+    }
+  });
+  return s;
+}
+
+// 互先のうち色（白番・互白／黒番・互黒）が分かっている対局で、
+// 各プレイヤーの黒番・白番それぞれの勝敗を集計する（色不明の「互先」は対象外）
+function calcColorStats() {
+  const s = {};
+  state.players.forEach(p => s[p] = { blackW:0, blackL:0, whiteW:0, whiteL:0 });
+  state.history.forEach(m => {
+    if (m.type === "jigo") return; // 持碁は互先にならないため対象外
+    const tw = m.teai_w;
+    if (tw === "互黒") {
+      if (s[m.winner]) s[m.winner].blackW++;
+      if (s[m.loser])  s[m.loser].whiteL++;
+    } else if (tw === "互白") {
+      if (s[m.winner]) s[m.winner].whiteW++;
+      if (s[m.loser])  s[m.loser].blackL++;
+    }
+    // 「互先」（色不明）は対象外
+  });
+  return s;
+}
+
+function renderRoleColorStats() {
+  const roleEl  = document.getElementById("role-stats-list");
+  const colorEl = document.getElementById("color-stats-list");
+  if (!roleEl || !colorEl) return;
+
+  const role  = calcRoleStats();
+  const color = calcColorStats();
+
+  const roleRows = state.players.filter(p => {
+    const r = role[p];
+    return (r.upperW + r.upperL + r.lowerW + r.lowerL) > 0;
+  });
+  roleEl.innerHTML = roleRows.length ? roleRows.map(p => {
+    const r = role[p];
+    const upperTotal = r.upperW + r.upperL;
+    const lowerTotal = r.lowerW + r.lowerL;
+    const upperStr = upperTotal ? `${r.upperW}勝${r.upperL}敗${winRate(r.upperW, r.upperL)}` : "対局なし";
+    const lowerStr = lowerTotal ? `${r.lowerW}勝${r.lowerL}敗${winRate(r.lowerW, r.lowerL)}` : "対局なし";
+    return `
+      <div class="rank-row">
+        <div class="rank-info">
+          <div><strong>${p}</strong></div>
+          <div class="rank-record">上手：${upperStr}　／　下手：${lowerStr}</div>
+        </div>
+      </div>`;
+  }).join("") : `<p style="color:#999;font-size:0.88rem">該当する対局がありません。</p>`;
+
+  const colorRows = state.players.filter(p => {
+    const c = color[p];
+    return (c.blackW + c.blackL + c.whiteW + c.whiteL) > 0;
+  });
+  colorEl.innerHTML = colorRows.length ? colorRows.map(p => {
+    const c = color[p];
+    const blackTotal = c.blackW + c.blackL;
+    const whiteTotal = c.whiteW + c.whiteL;
+    const blackStr = blackTotal ? `${c.blackW}勝${c.blackL}敗${winRate(c.blackW, c.blackL)}` : "対局なし";
+    const whiteStr = whiteTotal ? `${c.whiteW}勝${c.whiteL}敗${winRate(c.whiteW, c.whiteL)}` : "対局なし";
+    return `
+      <div class="rank-row">
+        <div class="rank-info">
+          <div><strong>${p}</strong></div>
+          <div class="rank-record">⚫黒：${blackStr}　／　⚪白：${whiteStr}</div>
+        </div>
+      </div>`;
+  }).join("") : `<p style="color:#999;font-size:0.88rem">該当する対局がありません。</p>`;
 }
 
 // ご無沙汰ランキング：最後に対局した日が古い人ほど上位に表示する
