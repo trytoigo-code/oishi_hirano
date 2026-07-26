@@ -57,8 +57,10 @@
       「先」なら先・向先、「2子」なら2子・向2、というように同じ差の手合いをまとめて集計
   - ご無沙汰ランキング（順位タブ。最後に対局した日が古い人ほど上位に表示）
   - 半目職人ランキング（順位タブ。半目差での勝利数。半目勝ちが1件も無い間は非表示）
-  - 上手・下手成績（順位タブ。手合い差のある対局＝互先を除く、で上手・下手それぞれの勝敗を集計）
-  - 互先 黒白成績（順位タブ。互先のうち色が分かっている対局＝互白・互黒、での黒番・白番の勝敗を集計。色不明の「互先」は対象外）
+  - 上手・下手成績（順位タブ。ご無沙汰ランキングより上に表示。手合い差のある対局＝互先を除く、で
+      全体（上手勝ち/下手勝ちの局数・割合）と対局者ごとの勝敗を集計）
+  - 互先 黒白成績（順位タブ。互先のうち色が分かっている対局＝互白・互黒、で
+      全体（黒番勝ち/白番勝ちの局数・割合）と対局者ごとの勝敗を集計。色不明の「互先」は対象外）
   - 対局コメント（履歴から各対局に一言メモを後から追記可能。短文はそのまま表示、長文は折りたたみ）
   - コメントへのリアクション（👍😄😮🔥の4種。誰が押したかFirebaseで全員に同期）
   - Firebase によるリアルタイム同期
@@ -342,6 +344,18 @@
       </div>
       <div id="rank-list"></div>
 
+      <h3 style="margin-top:24px">🎓 上手・下手成績</h3>
+      <p class="note">手合い差のある対局（互先を除く）で、上手・下手それぞれの勝敗。</p>
+      <div id="role-stats-overall"></div>
+      <div style="font-size:0.72rem;color:#999;font-family:sans-serif;margin-bottom:6px">対局者ごと</div>
+      <div id="role-stats-list"></div>
+
+      <h3 style="margin-top:24px">⚫⚪ 互先 黒白成績</h3>
+      <p class="note">互先のうち白番・黒番が分かっている対局の勝敗（色不明の互先は含みません）。</p>
+      <div id="color-stats-overall"></div>
+      <div style="font-size:0.72rem;color:#999;font-family:sans-serif;margin-bottom:6px">対局者ごと</div>
+      <div id="color-stats-list"></div>
+
       <h3 style="margin-top:24px">😴 ご無沙汰ランキング</h3>
       <p class="note">最後に対局した日が古い順。そろそろ誘ってみては？</p>
       <div id="gonosata-list"></div>
@@ -351,14 +365,6 @@
         <p class="note">半目差での勝利数ランキング。</p>
         <div id="hanme-list"></div>
       </div>
-
-      <h3 style="margin-top:24px">🎓 上手・下手成績</h3>
-      <p class="note">手合い差のある対局（互先を除く）で、上手・下手それぞれの勝敗。</p>
-      <div id="role-stats-list"></div>
-
-      <h3 style="margin-top:24px">⚫⚪ 互先 黒白成績</h3>
-      <p class="note">互先のうち白番・黒番が分かっている対局の勝敗（色不明の互先は含みません）。</p>
-      <div id="color-stats-list"></div>
 
     </div>
 
@@ -1102,10 +1108,63 @@ function calcColorStats() {
   return s;
 }
 
+// 全体（全員合計）：手合い差のある対局のうち、上手側が勝った対局数・下手側が勝った対局数
+function calcRoleOverall() {
+  let upperWins = 0, lowerWins = 0;
+  state.history.forEach(m => {
+    if (m.type === "jigo") {
+      const jw = jigoWinner(m);
+      if (!jw) return;
+      const teaiW = jw === m.p1 ? m.teai1 : m.teai2;
+      if (LOWER_TEAI.includes(teaiW)) lowerWins++; // 持碁の勝者は常に下手（黒番）
+    } else {
+      const tw = m.teai_w;
+      if (UPPER_TEAI.includes(tw))      upperWins++;
+      else if (LOWER_TEAI.includes(tw)) lowerWins++;
+    }
+  });
+  return { upperWins, lowerWins };
+}
+
+// 全体（全員合計）：互先のうち色が分かっている対局の、黒番勝ち・白番勝ちの数
+function calcColorOverall() {
+  let blackWins = 0, whiteWins = 0;
+  state.history.forEach(m => {
+    if (m.type === "jigo") return;
+    if (m.teai_w === "互黒")      blackWins++;
+    else if (m.teai_w === "互白") whiteWins++;
+  });
+  return { blackWins, whiteWins };
+}
+
+function overallBoxHTML(label, aName, aCount, bName, bCount) {
+  const total = aCount + bCount;
+  if (total === 0) return "";
+  const pct = n => Math.round(n / total * 100);
+  return `<div style="background:#f1f0ea;border:1px solid #e0dbcd;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.86rem;color:#2c3e50;line-height:1.9">
+    <div style="font-size:0.72rem;color:#999;font-family:sans-serif;margin-bottom:2px">${label}（全${total}局）</div>
+    <div>${aName}　${aCount}局　（${pct(aCount)}%）</div>
+    <div>${bName}　${bCount}局　（${pct(bCount)}%）</div>
+  </div>`;
+}
+
 function renderRoleColorStats() {
   const roleEl  = document.getElementById("role-stats-list");
   const colorEl = document.getElementById("color-stats-list");
   if (!roleEl || !colorEl) return;
+
+  const roleOverallEl  = document.getElementById("role-stats-overall");
+  const colorOverallEl = document.getElementById("color-stats-overall");
+  if (roleOverallEl) {
+    const { upperWins, lowerWins } = calcRoleOverall();
+    roleOverallEl.innerHTML = overallBoxHTML("全体の勝敗", "上手の勝ち", upperWins, "下手の勝ち", lowerWins)
+      || `<p style="color:#999;font-size:0.88rem">該当する対局がありません。</p>`;
+  }
+  if (colorOverallEl) {
+    const { blackWins, whiteWins } = calcColorOverall();
+    colorOverallEl.innerHTML = overallBoxHTML("全体の勝敗", "⚫黒番の勝ち", blackWins, "⚪白番の勝ち", whiteWins)
+      || `<p style="color:#999;font-size:0.88rem">該当する対局がありません。</p>`;
+  }
 
   const role  = calcRoleStats();
   const color = calcColorStats();
