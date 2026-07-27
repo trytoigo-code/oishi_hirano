@@ -1645,7 +1645,7 @@ function renderHistory() {
       const flow = flowSymbolsHTML(matches, player);
       return `<div style="padding:8px 0;border-bottom:1px solid #f0ede3">
         <div><strong>vs ${opp}</strong>　${ow}勝 ${ol}敗${jigoStr2}</div>
-        <div style="flex-wrap:wrap;margin-top:4px;letter-spacing:3px">${flow}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:1px;margin-top:4px">${flow}</div>
       </div>`;
     }).join("");
 
@@ -1653,7 +1653,7 @@ function renderHistory() {
     // 最近の流れ
     html += sectionHead("最近の流れ");
     html += `<div style="background:#f9f8f4;border-radius:6px;padding:12px 14px;margin-bottom:4px">
-      <div style="letter-spacing:4px;margin-bottom:6px">${flowSymbolsHTML(recent, player)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">${flowSymbolsHTML(recent, player)}</div>
       <div style="font-size:0.85rem;color:#666">${w}勝 ${l}敗${jigoStr}（${recent.length}局）</div>
     </div>`;
     // 相手別成績
@@ -1680,7 +1680,7 @@ function renderHistory() {
     // 最近の流れ
     html += sectionHead(`最近の流れ（${pA}視点）`);
     html += `<div style="background:#f9f8f4;border-radius:6px;padding:12px 14px;margin-bottom:4px">
-      <div style="letter-spacing:4px;margin-bottom:6px">${flowSymbolsHTML(recent, pA)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">${flowSymbolsHTML(recent, pA)}</div>
       <div style="font-size:0.85rem;color:#666">${pA} ${w}勝 ${l}敗${jigoStr}（${recent.length}局）</div>
     </div>`;
     // 決着内容
