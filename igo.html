@@ -47,6 +47,9 @@
       2人選択：最近の流れ・決着内容・直接対局履歴
   - 手合い自動計算（3連勝で手合い変更、多段階対応）
   - 手合いの独立保存（履歴に依存せず管理）
+  - イレギュラー対局対応（記録された手合いが、その対局の時点でのペアの正規の手合いと
+      異なる場合、連勝カウント・手合い変更の判定から除外する。対局結果自体は勝敗記録・
+      順位・履歴に通常どおり反映され、履歴一覧には「イレギュラー」バッジを表示する）
   - 初期手合い設定（ペアごとに手合いを手動設定可能）
   - シーズンリセット（履歴をFirebaseに保存後リセット・手合いは引き継ぎ）
   - 過去シーズンのアーカイブ表示（Firebase go-league/seasons/ に保存）
@@ -187,6 +190,7 @@
     .badge-j { background: #888; }
     .badge-t { background: #c0392b; }
     .badge-f { background: #7f8c8d; }
+    .badge-irregular { background: #d35400; }
 
     /* Toast */
     #toast {
@@ -833,6 +837,23 @@ function matchTeaiCategory(m) {
   return teaiCategory(t);
 }
 
+// 対局に記録された手合いから、手合い差の絶対値(0〜4)と、勝者が上手側だったかを返す
+// （イレギュラー対局判定用）。手合い未設定（指定なし）の対局はnullを返す＝判定対象外。
+function matchTeaiInfo(m) {
+  let teaiW;
+  if (m.type === "jigo") {
+    const jw = jigoWinner(m);
+    if (!jw) return null;
+    teaiW = jw === m.p1 ? m.teai1 : m.teai2;
+  } else {
+    teaiW = m.teai_w;
+  }
+  const cat = teaiCategory(teaiW);
+  if (!cat) return null;
+  const absLevel = cat === "互先" ? 0 : { "先":1, "2子":2, "3子":3, "4子":4 }[cat];
+  return { absLevel, isUpperWinner: UPPER_TEAI.includes(teaiW) };
+}
+
 function calcStats(filterCategory) {
   const s = {};
   state.players.forEach(p => s[p] = { name:p, wins:0, losses:0, total:0 });
@@ -988,6 +1009,7 @@ function badgeHTML(m) {
 let selectedPlayers = [];
 let lastSorted = []; // 順位変動比較用
 let sortMode = "wins";
+let currentIrregularMatches = new Set(); // 履歴描画時に再計算する、イレギュラー対局の集合
 const REACTION_EMOJIS = ["👍","😄","😮","🔥"];
 // "YYYY/M/D" 形式の日付文字列を比較可能な数値に変換（不正・欠損時は0）
 function dateSortValue(dateStr) {
@@ -1564,7 +1586,7 @@ function matchListHTML(filtered, anchorPlayer) {
     return `
       <div class="hist-item" style="flex-direction:column;align-items:stretch">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>${leftName} vs ${rightName} ${badgeHTML(m)}<br>
+          <div>${leftName} vs ${rightName} ${badgeHTML(m)}${currentIrregularMatches.has(m) ? '<span class="badge badge-irregular" title="記録された手合いが、その時点の正規の手合いと異なるため、連勝・手合いには反映されていません">イレギュラー</span>' : ""}<br>
           <span class="hist-date">${m.date}</span></div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="comment-btn" data-id="${m.id || idx}" style="background:#f0ede4;color:#888;border:1px solid #ddd;padding:5px 8px;border-radius:4px;font-size:0.78rem;cursor:pointer">💬</button>
@@ -1600,6 +1622,7 @@ function sectionHead(title) {
 // 選択中の対局者数（0人／1人／2人）によって表示内容が変わる
 function renderHistory() {
   renderHistoryFilter();
+  currentIrregularMatches = computeIrregularMatches();
   const el = document.getElementById("history-list");
 
   const allFiltered = state.history
@@ -1845,7 +1868,10 @@ function migrateFromHistory() {
 
 // 対局登録後にlevels/streaksを更新する
 // target省略時はstate.levels/state.streaksを直接更新（従来動作）
-function updateLevelsAndStreaks(m, target) {
+// irregularSetを渡すと、記録された手合いがその時点でのペアの正規の手合いと食い違う
+// 対局（イレギュラー対局）をそこへ集め、その対局については連勝・手合いの更新をスキップする。
+// 対局結果自体（勝敗記録・順位・履歴）は別途、通常どおり反映される。
+function updateLevelsAndStreaks(m, target, irregularSet) {
   const levels  = target ? target.levels  : state.levels;
   const streaks = target ? target.streaks : state.streaks;
   let winner;
@@ -1861,6 +1887,25 @@ function updateLevelsAndStreaks(m, target) {
   const ps = state.players;
   // キーの左側プレイヤー（インデックスが小さい方）を基準にstreakの符号を決める
   const leftP = ps.indexOf(pA) <= ps.indexOf(pB) ? pA : pB;
+
+  // ---- イレギュラー判定 ----
+  // 記録された手合いが、この対局を処理する時点でのペアの正規の手合いと一致するか確認する。
+  // 手合い未設定（指定なし）の対局は対象外（従来通り更新する）。
+  const info = matchTeaiInfo(m);
+  if (info) {
+    const curLevel = levels[key] || 0;
+    let irregular = info.absLevel !== Math.abs(curLevel);
+    if (!irregular && Math.abs(curLevel) > 0) {
+      const leftIsUpperExpected = curLevel > 0;
+      const winnerIsLeft = winner === leftP;
+      const expectedWinnerIsUpper = winnerIsLeft === leftIsUpperExpected;
+      if (info.isUpperWinner !== expectedWinnerIsUpper) irregular = true;
+    }
+    if (irregular) {
+      if (irregularSet) irregularSet.add(m);
+      return; // 連勝・手合いは更新しない
+    }
+  }
 
   const cur = streaks[key] || 0;
   let newStreak;
@@ -1880,6 +1925,16 @@ function updateLevelsAndStreaks(m, target) {
 function chronologicalHistory() {
   return [...state.history].reverse()
     .sort((a, b) => dateSortValue(a.date) - dateSortValue(b.date));
+}
+
+// 履歴表示用: 記録された手合いが、その対局処理時点でのペアの正規手合いと異なっていた
+// （＝イレギュラー対局だった）対局の集合を返す。state.levels/state.streaks本体には
+// 一切書き込まない、バッジ表示専用の軽量な再計算。
+function computeIrregularMatches() {
+  const irregulars = new Set();
+  const tmp = { levels: {}, streaks: {} };
+  chronologicalHistory().forEach(m => updateLevelsAndStreaks(m, tmp, irregulars));
+  return irregulars;
 }
 
 // levelだけを返す（autoFillTeai・renderHandicap用）
